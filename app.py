@@ -27,8 +27,12 @@ def inserir_produto(nome, quantidade, preco):
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO produtos (nome, quantidade, preco) VALUES (?, ?, ?)", (nome, quantidade, preco))
+    cursor.execute("SELECT * FROM produtos ORDER BY id DESC LIMIT 1")
+    produto_novo = cursor.fetchone()
+    mensagem = "inserção"
     conn.commit()
     conn.close()
+    registrar_auditoria(produto_novo, mensagem)
 
 def buscar_produtos():
     conn = conectar()
@@ -38,12 +42,19 @@ def buscar_produtos():
     conn.close()
     return linhas
 
+def buscar_produto_id_
+
 def atualizar_produto(id_produto, nome, quantidade, preco):
     conn = conectar()
     cursor = conn.cursor()
+    cursor.execute("SELECT * FROM produtos WHERE id=?", (id_produto,))
+    produto_antigo = cursor.fetchone()
+    mensagem = "atualização"
     cursor.execute("UPDATE produtos SET nome=?, quantidade=?, preco=? WHERE id=?", (nome, quantidade, preco, id_produto))
     conn.commit()
     conn.close()
+    registrar_auditoria(produto_antigo, mensagem)
+    return True
 
 def excluir_produto_db(id_produto):
     # Primeiro busca o produto para registrar no log
@@ -51,23 +62,25 @@ def excluir_produto_db(id_produto):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM produtos WHERE id=?", (id_produto,))
     produto = cursor.fetchone()
+    mensagem = "exclusão"
     
     if produto:
         cursor.execute("DELETE FROM produtos WHERE id=?", (id_produto,))
         conn.commit()
         conn.close()
         # Registrar auditoria
-        registrar_auditoria(produto)
+        registrar_auditoria(produto, mensagem="exclusão")
         return True
     
     conn.close()
     return False
 
 # --- Lógica de Auditoria ---
-def registrar_auditoria(produto):
+def registrar_auditoria(produto, mensagem):
     id_prod, nome, quantidade, preco = produto
     data_hora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_msg = f"[{data_hora}] EXCLUSÃO: ID: {id_prod}, Nome: '{nome}', Quantidade: {quantidade}, Preço: {preco:.2f}\n"
+
+    log_msg = f"[{data_hora}] {mensagem.upper()}: ID: {id_prod}, Nome: '{nome}', Quantidade: {quantidade}, Preço: {preco:.2f}\n"
     
     with open("auditoria.txt", "a", encoding="utf-8") as f:
         f.write(log_msg)
@@ -89,7 +102,7 @@ class EstoqueApp:
         
         # Frame Entradas
         frame_entradas = tk.Frame(self.root, padx=10, pady=10)
-        frame_entradas.pack(fill=tk.X)
+        frame_entradas.pack(fill=tk.X) # roda pé
         
         tk.Label(frame_entradas, text="Nome:").grid(row=0, column=0, sticky=tk.W, pady=2)
         tk.Entry(frame_entradas, textvariable=self.var_nome, width=30).grid(row=0, column=1, pady=2, padx=5)

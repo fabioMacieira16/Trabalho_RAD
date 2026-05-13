@@ -1,1 +1,5 @@
-[2026-05-10 18:02:44] EXCLUSÃO: ID: 3, Nome: 'Thiago', Quantidade: 90, Preço: 12.00
+[2026-05-11 19:59:05] ATUALIZAÇÃO: ID: 7, Nome: 'thiaho', Quantidade: 12, Preço: 21.00
+[2026-05-11 20:19:46] ATUALIZAÇÃO: ID: 7, Nome: 'thiago', Quantidade: 12, Preço: 21.00
+[2026-05-11 20:37:00] EXCLUSÃO: ID: 12, Nome: 'hh', Quantidade: 11, Preço: 3.00
+[2026-05-11 20:38:08] INSERÇÃO: ID: None, Nome: 'fa', Quantidade: 12, Preço: 12.00
+[2026-05-11 20:43:20] INSERÇÃO: ID: 14, Nome: 'ee', Quantidade: 1, Preço: 122.00
