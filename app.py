@@ -42,8 +42,6 @@ def buscar_produtos():
     conn.close()
     return linhas
 
-def buscar_produto_id_
-
 def atualizar_produto(id_produto, nome, quantidade, preco):
     conn = conectar()
     cursor = conn.cursor()
