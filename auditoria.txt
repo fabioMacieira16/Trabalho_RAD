@@ -1,0 +1,3 @@
+[2026-05-29 15:37:58] INSERÇÃO: ID: 15, Nome: 'Manga', Quantidade: 12, Preço: 20.00
+[29/05/2026 15:41:18] INSERÇÃO - Produto "Banana" (Qtd: 12) cadastrado com sucesso.
+[29/05/2026 15:41:31] INSERÇÃO - Produto "pera" (Qtd: 22) cadastrado com sucesso.
