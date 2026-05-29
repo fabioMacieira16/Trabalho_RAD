@@ -2,97 +2,120 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
 import datetime
-import os
 
-# --- Lógica de Banco de Dados ---
-def conectar():
-    conn = sqlite3.connect("estoque.db")
-    return conn
+# Arquivos usados pela aplicação.
+ARQUIVO_BANCO = "estoque.db"
+ARQUIVO_AUDITORIA = "auditoria.txt"
+
 
 def criar_tabela():
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS produtos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            quantidade INTEGER NOT NULL,
-            preco REAL NOT NULL
+    # Cria a tabela apenas na primeira execução.
+    with sqlite3.connect(ARQUIVO_BANCO) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS produtos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                quantidade INTEGER NOT NULL,
+                preco REAL NOT NULL
+            )
+            """
         )
-    ''')
-    conn.commit()
-    conn.close()
 
-def inserir_produto(nome, quantidade, preco):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO produtos (nome, quantidade, preco) VALUES (?, ?, ?)", (nome, quantidade, preco))
-    cursor.execute("SELECT * FROM produtos ORDER BY id DESC LIMIT 1")
-    produto_novo = cursor.fetchone()
-    mensagem = "inserção"
-    conn.commit()
-    conn.close()
-    registrar_auditoria(produto_novo, mensagem)
 
-def buscar_produtos():
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM produtos")
-    linhas = cursor.fetchall()
-    conn.close()
-    return linhas
+def auditoria(acao, produto):
+    # Se não houver produto, não grava nada no arquivo de auditoria.
+    if not produto:
+        return
 
-def atualizar_produto(id_produto, nome, quantidade, preco):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM produtos WHERE id=?", (id_produto,))
-    produto_antigo = cursor.fetchone()
-    mensagem = "atualização"
-    cursor.execute("UPDATE produtos SET nome=?, quantidade=?, preco=? WHERE id=?", (nome, quantidade, preco, id_produto))
-    conn.commit()
-    conn.close()
-    registrar_auditoria(produto_antigo, mensagem)
-    return True
-
-def excluir_produto_db(id_produto):
-    # Primeiro busca o produto para registrar no log
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM produtos WHERE id=?", (id_produto,))
-    produto = cursor.fetchone()
-    mensagem = "exclusão"
-    
-    if produto:
-        cursor.execute("DELETE FROM produtos WHERE id=?", (id_produto,))
-        conn.commit()
-        conn.close()
-        # Registrar auditoria
-        registrar_auditoria(produto, mensagem="exclusão")
-        return True
-    
-    conn.close()
-    return False
-
-# --- Lógica de Auditoria ---
-def registrar_auditoria(produto, mensagem):
     id_prod, nome, quantidade, preco = produto
     data_hora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    texto = (
+        f"[{data_hora}] {acao.upper()}: ID: {id_prod}, Nome: '{nome}', "
+        f"Quantidade: {quantidade}, Preço: {preco:.2f}\n"
+    )
 
-    log_msg = f"[{data_hora}] {mensagem.upper()}: ID: {id_prod}, Nome: '{nome}', Quantidade: {quantidade}, Preço: {preco:.2f}\n"
-    
-    with open("auditoria.txt", "a", encoding="utf-8") as f:
-        f.write(log_msg)
+    with open(ARQUIVO_AUDITORIA, "a", encoding="utf-8") as arquivo:
+        arquivo.write(texto)
 
-# --- Lógica de Interface (GUI) ---
-class EstoqueApp:
+
+def buscar_produtos():
+    # Busca todos os produtos para mostrar na tabela da tela.
+    with sqlite3.connect(ARQUIVO_BANCO) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM produtos ORDER BY id")
+        return cursor.fetchall()
+
+
+def add_produto(nome, quantidade, preco):
+    # Insere no banco e depois registra a ação no log.
+    with sqlite3.connect(ARQUIVO_BANCO) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO produtos (nome, quantidade, preco) VALUES (?, ?, ?)",
+            (nome, quantidade, preco),
+        )
+        id_novo = cursor.lastrowid
+        cursor.execute(
+            "SELECT id, nome, quantidade, preco FROM produtos WHERE id = ?",
+            (id_novo,),
+        )
+        produto_novo = cursor.fetchone()
+
+    auditoria("inserção", produto_novo)
+
+
+def atualizar_produto(id_produto, nome, quantidade, preco):
+    # Primeiro verifica se o produto existe.
+    with sqlite3.connect(ARQUIVO_BANCO) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, nome, quantidade, preco FROM produtos WHERE id = ?",
+            (id_produto,),
+        )
+        produto_antigo = cursor.fetchone()
+
+        if not produto_antigo:
+            return False
+
+        cursor.execute(
+            "UPDATE produtos SET nome = ?, quantidade = ?, preco = ? WHERE id = ?",
+            (nome, quantidade, preco, id_produto),
+        )
+
+    auditoria("atualização", produto_antigo)
+    return True
+
+
+def excluir_prod(id_produto):
+    # Busca antes de excluir para poder registrar no log.
+    with sqlite3.connect(ARQUIVO_BANCO) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, nome, quantidade, preco FROM produtos WHERE id = ?",
+            (id_produto,),
+        )
+        produto = cursor.fetchone()
+
+        if not produto:
+            return False
+
+        cursor.execute("DELETE FROM produtos WHERE id = ?", (id_produto,))
+
+    auditoria("exclusão", produto)
+    return True
+
+
+class Estoque:
     def __init__(self, root):
         self.root = root
-        self.root.title("Gerenciamento de Estoque")
-        self.root.geometry("600x450")
+        self.root.title("Meu Primeiro Sistema de Estoque")
+        self.root.geometry("760x450")
         
         criar_tabela()
         
-        # Variáveis
+        # Variáveis que ficam ligadas aos campos de entrada.
         self.var_id = tk.StringVar()
         self.var_nome = tk.StringVar()
         self.var_quantidade = tk.StringVar()
@@ -100,24 +123,24 @@ class EstoqueApp:
         
         # Frame Entradas
         frame_entradas = tk.Frame(self.root, padx=10, pady=10)
-        frame_entradas.pack(fill=tk.X) # roda pé
+        frame_entradas.pack(fill=tk.X)
         
         tk.Label(frame_entradas, text="Nome:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        tk.Entry(frame_entradas, textvariable=self.var_nome, width=30).grid(row=0, column=1, pady=2, padx=5)
-        
-        tk.Label(frame_entradas, text="Quantidade:").grid(row=1, column=0, sticky=tk.W, pady=2)
-        tk.Entry(frame_entradas, textvariable=self.var_quantidade, width=30).grid(row=1, column=1, pady=2, padx=5)
-        
-        tk.Label(frame_entradas, text="Preço:").grid(row=2, column=0, sticky=tk.W, pady=2)
-        tk.Entry(frame_entradas, textvariable=self.var_preco, width=30).grid(row=2, column=1, pady=2, padx=5)
+        tk.Entry(frame_entradas, textvariable=self.var_nome, width=22).grid(row=0, column=1, pady=2, padx=(5, 16))
+
+        tk.Label(frame_entradas, text="Quantidade:").grid(row=0, column=2, sticky=tk.W, pady=2)
+        tk.Entry(frame_entradas, textvariable=self.var_quantidade, width=12).grid(row=0, column=3, pady=2, padx=(5, 16))
+
+        tk.Label(frame_entradas, text="Preço:").grid(row=0, column=4, sticky=tk.W, pady=2)
+        tk.Entry(frame_entradas, textvariable=self.var_preco, width=12).grid(row=0, column=5, pady=2, padx=5)
         
         # Frame Botões
         frame_botoes = tk.Frame(self.root, padx=10, pady=5)
         frame_botoes.pack(fill=tk.X)
         
-        tk.Button(frame_botoes, text="Adicionar", command=self.adicionar).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame_botoes, text="Incluir", command=self.adicionar).pack(side=tk.LEFT, padx=5)
         tk.Button(frame_botoes, text="Atualizar", command=self.atualizar).pack(side=tk.LEFT, padx=5)
-        tk.Button(frame_botoes, text="Excluir", command=self.excluir).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame_botoes, text="Apagar", command=self.excluir).pack(side=tk.LEFT, padx=5)
         tk.Button(frame_botoes, text="Limpar", command=self.limpar_campos).pack(side=tk.LEFT, padx=5)
         
         # Frame Lista
@@ -147,6 +170,7 @@ class EstoqueApp:
         self.carregar_dados()
         
     def carregar_dados(self):
+        # Limpa a tabela e recarrega tudo do banco.
         for row in self.tree.get_children():
             self.tree.delete(row)
         for linha in buscar_produtos():
@@ -159,6 +183,7 @@ class EstoqueApp:
         self.var_preco.set("")
         
     def selecionar_item(self, event):
+        # Quando clica na tabela, joga os dados nos campos.
         item_selecionado = self.tree.focus()
         if not item_selecionado:
             return
@@ -170,6 +195,7 @@ class EstoqueApp:
             self.var_preco.set(valores[3])
             
     def validar_entradas(self):
+        # Confere se os campos foram preenchidos e se são números válidos.
         nome = self.var_nome.get().strip()
         qtd = self.var_quantidade.get().strip()
         preco = self.var_preco.get().strip()
@@ -188,40 +214,45 @@ class EstoqueApp:
         return True
 
     def adicionar(self):
+        # Botão Adicionar.
         if self.validar_entradas():
             nome = self.var_nome.get().strip()
             qtd = int(self.var_quantidade.get().strip())
             preco = float(self.var_preco.get().replace(',', '.').strip())
             
-            inserir_produto(nome, qtd, preco)
+            add_produto(nome, qtd, preco)
             self.carregar_dados()
             self.limpar_campos()
             messagebox.showinfo("Sucesso", "Produto adicionado com sucesso.")
 
     def atualizar(self):
+        # Botão Atualizar.
         if not self.var_id.get():
             messagebox.showwarning("Aviso", "Selecione um produto para atualizar.")
             return
             
         if self.validar_entradas():
-            id_prod = self.var_id.get()
+            id_prod = int(self.var_id.get())
             nome = self.var_nome.get().strip()
             qtd = int(self.var_quantidade.get().strip())
             preco = float(self.var_preco.get().replace(',', '.').strip())
             
-            atualizar_produto(id_prod, nome, qtd, preco)
-            self.carregar_dados()
-            self.limpar_campos()
-            messagebox.showinfo("Sucesso", "Produto atualizado com sucesso.")
+            if atualizar_produto(id_prod, nome, qtd, preco):
+                self.carregar_dados()
+                self.limpar_campos()
+                messagebox.showinfo("Sucesso", "Produto atualizado com sucesso.")
+            else:
+                messagebox.showerror("Erro", "Produto não encontrado.")
 
     def excluir(self):
+        # Botão Excluir.
         if not self.var_id.get():
             messagebox.showwarning("Aviso", "Selecione um produto para excluir.")
             return
             
-        id_prod = self.var_id.get()
+        id_prod = int(self.var_id.get())
         if messagebox.askyesno("Confirmar", "Deseja realmente excluir este produto?"):
-            if excluir_produto_db(id_prod):
+            if excluir_prod(id_prod):
                 self.carregar_dados()
                 self.limpar_campos()
                 messagebox.showinfo("Sucesso", "Produto excluído. Log de auditoria gerado.")
@@ -230,5 +261,5 @@ class EstoqueApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = EstoqueApp(root)
+    app = Estoque(root)
     root.mainloop()
