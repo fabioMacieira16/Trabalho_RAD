@@ -223,7 +223,7 @@ def excluir():
             messagebox.showerror("Erro", "Falha ao excluir o produto.")
 
 
-def criar_interface():
+def criar_tela():
     global var_id, var_nome, var_quantidade, var_preco, tabela_db
 
     janela_sistema = tk.Tk()
@@ -294,4 +294,4 @@ def criar_interface():
     janela_sistema.mainloop()
 
 if __name__ == "__main__":
-    criar_interface()
+    criar_tela()
